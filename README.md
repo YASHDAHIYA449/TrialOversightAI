@@ -446,7 +446,7 @@ The Streamlit dashboard in app3.py expects final unified files and the CRA repor
 
 Example installation:
 
-```bash
+```bash```
 pip install streamlit pandas plotly-express
 
 7.2 File Layout for Dashboard
