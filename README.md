@@ -525,12 +525,46 @@ Open the local URL that Streamlit prints (for example, http://localhost:8501).
 
 - Run phase_1.ipynb to compute subject, site, country, and region metrics and write dataset_subject.xlsx, dataset_site.xlsx, dataset_country.xlsx, and dataset_region.xlsx.
 
-- Run phase_2_3.ipynb to add PatientCleanStatus, BlockingReason, DQISubjectScore and aggregate to site metrics with SiteRiskStatus and CRAName, producing interim subject and site unified datasets.
+- Run phase_2_3.ipynb to add Patient_Clean_Status, Blocking_Reason, DQI_Subject_Score and aggregate to site metrics with Site_Risk_Status and CRA_Name, producing interim subject and site unified datasets.
 
 - Run phase_4.ipynb to derive interim_unified_country.xlsx and interim_unified_region.xlsx with geographic trends and readiness metrics.
 
-- Run phase_5.ipynb to lock down CriticalSubject, CriticalSite, AnalysisReadiness, generate RiskSignals and RecommendedActions, create AI summaries, and export Site_Oversight_Final_Report.xlsx and - Full_CRA_Site_Performance_Reports.txt.
+- Run phase_5.ipynb to lock down Critical_Subject, Critical_Site, Analysis_Readiness, generate Risk_Signals and Recommended_Actions, create AI summaries, and export Site_Oversight_Final_Report.xlsx and - Full_CRA_Site_Performance_Reports.txt.
 
 - Place the exported unified files and CRA report where app3.py expects them and run streamlit run app3.py to launch the dashboard.
 
 This flow covers the complete pipeline from raw EDC exports to interactive oversight and AI‑augmented CRA reporting.
+
+# Version 2.0 Features (Jan 2026 Update)
+
+The latest release evolves the TrialGuardianAI from a diagnostic tool into an active trial management platform with an enhanced tech stack and executive-level features.
+
+1. Executive Intelligence Layer
+
+- Global Executive Overview: A new top-tier entry point providing a "bird’s-eye view" of trial health across 23 studies.
+   
+- Risk Concentration Heatmap: Utilizes a relative intensity algorithm to identify geographic "hotspots" in AMERICA, ASIA, and EMEA without volume bias.
+
+- Normalized Performance Metrics: Global DQI and high-risk site percentages are calculated in real-time to guide resource allocation.
+
+2. Operational Actionability
+
+- Interactive Command Center: Added active buttons to Send Alerts to CRAs and Schedule Monitoring Visits, transitioning the dashboard from passive reporting to active intervention.
+
+- Trial Progress Timeline: Integrated Gantt charts to visualize site-level progression from Start-Up to Close-Out, providing crucial temporal context for data quality issues.
+
+- Empty-State Handling: Implementation of robust error-trapping and "No Data Found" alerts for a seamless user experience during complex filtering.
+
+3. Enhanced Quality & AI Logic
+
+- "90-0-80" Readiness Rule: A stricter, multi-factor gate for Analysis Readiness requiring >90% clean patients, zero safety queries, and >80 site DQI.
+
+- Visualized Safety-Cap: Explicit UI flagging for subjects whose DQI is capped at 60 due to safety overrides, ensuring total transparency in risk scoring.
+
+- Persona-Aware Narratives: Optimized the Gemini 2.5 Flash layer to better distinguish between tactical CRA needs and strategic CSM oversight requirements.
+
+4. Modern UI/UX Architecture
+
+- Streamlit Ant-Design (SAC) Integration: Replaced standard sidebar selectors with a modern, icon-based navigation menu for professional-grade application feel.
+
+- Responsive Multi-Tier Hub: Optimized drill-down performance, allowing users to move from global trends to specific subject-level "Blocking Reasons" in seconds.
