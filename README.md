@@ -1,570 +1,261 @@
-# Clinical Trial Oversight – End‑to‑End Pipeline
+# Clinical Trial Oversight: End-to-End Pipeline
 
-This repository implements an end‑to‑end clinical data oversight pipeline built for the Novartis hackathon, transforming multi‑study EDC exports into an interactive oversight dashboard with deterministic rules, risk signals, and AI‑generated CRA summaries.
+An end-to-end clinical data oversight pipeline built for the Novartis hackathon. It transforms multi-study EDC exports into an interactive oversight dashboard with deterministic rules, risk signals, and AI-generated CRA summaries.
 
----
+## Table of Contents
 
-1. Project Overview
-
-This project ingests raw Excel exports from 23 anonymized clinical studies, unifies them into a master subject‑visit dataset, engineers quality and risk metrics, aggregates to site/country/region, and surfaces insights through a Streamlit dashboard and AI‑generated CRA performance reports.
-
-Core components:
-
-- Data ingestion and harmonization from multiple file types per study into a single CPID spine per study.
-- Feature engineering for data quality indicators (DQI), missingness, queries, protocol deviations, and signatures at subject level.
-- Multi‑level aggregation into site, country, and region metrics and trends.
-- Deterministic oversight flags: Patient Clean Status, Blocking Reason, Site Risk Status (Red/Amber/Green), Analysis Readiness.
-- Rule‑driven risk signals and playbook‑based actions (for example, safety escalation, query backlog).
-- Generative AI layer that produces per‑site narrative summaries and a CRA site performance report.
-- Streamlit dashboard exposing subject, site, country, and region level oversight views.
+1. [Project Overview](#1-project-overview)
+2. [Repository Structure](#2-repository-structure)
+3. [Phase-by-Phase Workflow](#3-phase-by-phase-workflow)
+4. [Key Definitions](#4-key-definitions)
+5. [Dashboard: How to Run](#5-dashboard-how-to-run)
+6. [End-to-End Execution Order](#6-end-to-end-execution-order)
+7. [Version 2.0 Features (Jan 2026 Update)](#7-version-20-features-jan-2026-update)
 
 ---
 
-2. Repository Structure
+## 1. Project Overview
 
-Key files and their roles:
+The project ingests raw Excel exports from **23 anonymized clinical studies**, unifies them into a master subject-visit dataset, engineers quality and risk metrics, aggregates to site / country / region level, and surfaces insights through a Streamlit dashboard and AI-generated CRA performance reports.
 
-- master_dataset_creation.py  
-  - Scans study folders and locates relevant Excel files for each study based on filename patterns like “cpid”, “pages”, “inactivated”, “lab”, “sae”, “meddra”, “whodd”,   “edrr”.
-  - Normalizes heterogeneous column names to canonical names using a mapping (for example, “site id”, “site number” to SiteID; “subject name”, “patient id” to SubjectID; “form oid” to FormOID).  
-  - Builds a CPID spine per study and uses robust left joins to merge other domains on keys like (SiteID, SubjectID).
-  - Concatenates all study‑level spines into a single masterdataset.csv.
+**Core components**
 
-- master_cra_creation.py  
-  - Reads the master CPID file and CRA‑related sheets and constructs a master CRA dataset linking SiteID and CRAName (Action Owner) to detailed query and issue records.
-
-- combined_query_report.ipynb  
-  - Combines raw query exports into a unified cumulative_query_report.xlsx at record level with fields such as Study, Region, Country, Site Number, Subject Name, Folder Name, Form, Field OID, Query Status, Action Owner, days‑since‑open and days‑since‑response metrics.
-
-- phase_1.ipynb  
-  - Uses the master CPID dataset and cumulative reports (missing pages, query, non‑conformant) to build a subject‑visit‑form master of roughly 57,974 rows and 101 columns.  
-  - Derives core subject, site, country, and region‑level metrics (missing visits, missing pages, queries, protocol deviations, verification and signature status, percentages) and writes:
-    - dataset_subject.xlsx (subject level)  
-    - dataset_site.xlsx (site level)  
-    - dataset_country.xlsx (country level)  
-    - dataset_region.xlsx (region level)
-
-- phase_2_3.ipynb  
-  - Starts from unified subject‑level metrics and adds PatientCleanStatus, BlockingReason, and DQISubjectScore.  
-  - Aggregates to site‑level metrics such as CleanPatientRate, AvgDQISite, HighRiskPatientCount, TotalOpenQueries, TotalSafetyQueries, OpenIssuesperPatient, and SiteRiskStatus (Red/Amber/Green).  
-  - Produces interim unified subject and site files (for example, interim_unified_subject.xlsx and unified site outputs).
-
-- phase_4.ipynb  
-  - Joins site‑level metrics with geographic mapping (SiteID to country to region) to generate unified country and region datasets with trends, counts of red sites, and readiness percentages.
-
-- phase_5.ipynb  
-  - Phase 1: Lock down deterministic business logic for critical subjects, critical sites, DQI, risk status, and analysis readiness.  
-  - Phase 2: Rule‑driven agentic AI that generates structured risk signals and recommended actions per site.  
-  - Phase 3: Generative AI using a large language model (for example, Gemini 2.5 Flash) to generate CRA and CSM site narratives and write:
-    - Site_Oversight_Final_Report.xlsx (per‑site metrics, risk signals, AI summaries)  
-    - Full_CRA_Site_Performance_Reports.txt (multi‑site CRA‑oriented report)
-
-- interim_unified_subject.xlsx, interim_unified_site.xlsx, interim_unified_country.xlsx, interim_unified_region.xlsx  
-  - Staging outputs used as inputs to phase_5 and the dashboard.
-
-- Site_Oversight_Final_Report.xlsx  
-  - Final per‑site oversight table used by the dashboard containing SiteID, CleanPatientRate, AvgDQISite, HighRiskPatientCount, TotalOpenQueries, TotalSafetyQueries, SubjectCount, OpenIssuesperPatient, SiteRiskStatus, CRAName, AnalysisReadiness, country, region, CriticalSite, RiskSignals, RecommendedActions, and AI summaries.
-
-- Full_CRA_Site_Performance_Reports.txt  
-  - Human‑readable text summaries by site, including risk color, metrics, risk signals, and recommended actions.
-
-- app3.py (Streamlit app)  
-  - Reads unified subject, site, country, and region files and exposes four pages: SUBJECT LEVEL, SITE LEVEL, COUNTRY LEVEL, REGION LEVEL.  
-  - Integrates the CRA site performance report file to show AI summaries per site.
+- Data ingestion and harmonization from multiple file types per study into a single CPID spine per study
+- Feature engineering for data quality indicators (DQI), missingness, queries, protocol deviations, and signatures at subject level
+- Multi-level aggregation into site, country, and region metrics and trends
+- Deterministic oversight flags: Patient Clean Status, Blocking Reason, Site Risk Status (Red/Amber/Green), Analysis Readiness
+- Rule-driven risk signals and playbook-based actions (e.g., safety escalation, query backlog)
+- Generative AI layer that produces per-site narrative summaries and a CRA site performance report
+- Streamlit dashboard exposing subject, site, country, and region level oversight views
 
 ---
 
-3. Phase‑by‑Phase Workflow
+## 2. Repository Structure
 
-3.1 Phase 0 – Master Dataset Creation (master_dataset_creation.py)
-
-This phase converts raw multi‑file study exports into a single masterdataset.csv.
-
-Steps:
-
-- Study discovery: iterate over all study folders and identify 23 studies (IDs from 1 to 25 with two missing in between).
-- File discovery per study: use keyword patterns to locate CPID spine files and other domains such as visit, lab, SAE, pages, inactivated, MedDRA, WHODrug, and EDRR files.
-- Column normalization:  
-  - Lower‑case and strip column names.  
-  - Map multiple variants to standard keys via a mapping dictionary (for example, “site id” and “site number” to SiteID).
-- Robust left joins:  
-  - Start from CPID as the spine.  
-  - For each domain, perform a safe left join using only keys present on both sides and dropping overlapping columns that are not join keys.
-- Concatenation: merge all per‑study spines to form a combined master dataset and write masterdataset.csv.
-
-3.2 Phase 1 – Subject, Site, Country, Region Metrics (phase_1.ipynb)
-
-Phase 1 builds the foundational metrics for oversight across levels.
-
-Key steps:
-
-1. Load base master dataset  
-   - Read a unified master Excel file to obtain a subject‑visit dataset with study, region, country, SiteID, SubjectID and several EDC‑derived metrics.
-
-2. Ingest cumulative reports  
-   - Missing Pages Report  
-   - Query Report  
-   - Non‑Conformant Report  
-   - Validate shapes to understand coverage of missing pages, queries, and non‑conformant records.
-
-3. Derived core subject‑level flags  
-   - MissingVisit  
-     - Constructed using expected visit schedule information such as visit name, projected date, and days outstanding, setting MissingVisit = 1 when a visit is expected but not present and overdue.  
-   - MissingPages  
-     - Rebuild subject‑level counts from the Missing Pages report (group by subject, count missing pages, and merge into the master on SubjectID, filling missing values with 0).  
-   - UncodedTerms  
-     - Uses coding‑required flags from MedDRA and WHODrug tables to count uncoded terms per subject.  
-   - Query and safety metrics  
-     - TotalQueries: total query count per subject from the cumulative query report.  
-     - SafetyQueries: queries flagged as safety.  
-   - CRF and signature/verification metrics  
-     - ProblematicCRF: pages requiring verification where CRFs are not frozen or unlocked.  
-     - ProtocolDeviations: sum of confirmed and proposed deviations per subject.  
-     - CRFNotSigned: CRFs overdue for signatures (0–45 days, 45–90 days, beyond 90 days), plus broken and never signed CRFs.  
-     - problematicreviews: count of records needing review (non‑null review status or action status).  
-     - MissingCRFDays: total days a page is missing per subject.  
-     - OpenIssues: maximum total open issues per subject.  
-     - Days Outstanding: maximum days outstanding per subject.
-
-4. Percentage KPIs (subject level)  
-   - missingvisitspct = 100 × MissingVisit / Expected Visits (if Expected Visits > 0, else 0).  
-   - missingpagespct = 100 × MissingPages / TotalPagesMissingEntered (if denominator > 0, else 0).  
-   - openqueriespct = 100 × OpenQueries / TotalQueries (if denominator > 0, else 0).  
-   - crfverificationneededpct = 100 × ProblematicCRF / PagesEntered (if denominator > 0, else 0).  
-   - crfsignatureneededpct = 100 × CRFNotSigned / PagesEntered (if denominator > 0, else 0).
-
-5. Aggregation by SubjectID  
-   - Group subject‑level records by SubjectID, summing counts and averaging percentage columns to produce a clean subject‑level dataset (one row per subject).  
-   - Save this as dataset_subject.xlsx.
-
-6. Aggregation by Site, Country, Region  
-   - Group by SiteID to create dataset_site.xlsx with aggregated counts and averaged percentage KPIs per site.  
-   - Group by country to create dataset_country.xlsx with similar metrics per country.  
-   - Group by region (for example, AMERICA, ASIA, EMEA) to create dataset_region.xlsx.
-
-3.3 Phase 2–3 – Patient Clean Status, Blocking Reason, DQI, Site Metrics (phase_2_3.ipynb)
-
-This phase adds cleanliness and scoring logic at subject level and aggregates to site‑level oversight metrics.
-
-3.3.1 PatientCleanStatus and BlockingReason
-
-1. Base columns  
-   - Uses a unified subject dataset containing subject‑level counts and percentages for missing visits, missing pages, open queries, safety queries, protocol deviations, CRF signature and verification status, and other counts derived in Phase 1.
-
-2. Clean / Not Clean logic  
-   - Define a set of reason columns such as MissingVisit, MissingPages, OpenQueries, SafetyQueries, crfverificationneededpct, crfsignatureneededpct, and ProtocolDeviations.  
-   - PatientCleanStatus:  
-     - Clean if all reason columns are zero (no missing data, no open or safety queries, no pending verification or signatures, and no protocol deviations).  
-     - Not Clean otherwise.
-   - BlockingReason:  
-     - For each subject, collect all reason columns with values greater than zero and join their names into a comma‑separated string (for example, “MissingPages, Open Queries, crfsignatureneededpct, ProtocolDeviations”).  
-     - For clean subjects, set BlockingReason to None.
-
-3.3.2 DQISubjectScore (DQI with Safety Cap Logic)
-
-DQISubjectScore is a 0–100 data quality index defined per subject.
-
-1. Base score  
-   - Initialize score = 100 for each subject.
-
-2. Scalar deductions per subject  
-   - Missing visits: 5 points per missing visit.  
-   - Open queries: 1.5 points per open query.  
-   - Unsigned CRFs: 1 point per unsigned CRF (CRFNotSigned).  
-   - Unverified pages: 1 point per problematic review record (problematicreviews).  
-   - Protocol deviations: 4 points per protocol deviation.
-
-3. Safety cap logic  
-   - If SafetyQueries > 0:  
-     - Apply a flat deduction of 20 points.  
-     - Cap the score at 60 (score = min(score, 60)).
-
-4. Final bounding  
-   - Ensure the score is not negative by taking max(0, score).  
-   - Store the result as DQISubjectScore in the unified subject dataset.
-
-Interpretation:
-
-- 90–100: high‑quality subjects with minimal issues.  
-- 70–89: moderate quality with some issues.  
-- 60–69: borderline subjects near escalation.  
-- Below 60: high‑risk subjects included in HighRiskPatientCount at site level.
-
-3.3.3 Site‑Level Aggregation and Traffic Lights
-
-1. Subject–site linkage  
-   - Build a mapping from SubjectID to SiteID using the Phase 1 dataset and merge it into the subject‑level dataset to attach each subject to a site.
-
-2. Site metrics (group by SiteID)  
-   For each site:
-
-   - CleanPatientRate = 100 × proportion of subjects with PatientCleanStatus == “Clean”.
-   - AvgDQISite = mean DQISubjectScore across all subjects at that site.
-   - HighRiskPatientCount = count of subjects with DQISubjectScore < 60.
-   - TotalOpenQueries = sum of open queries across subjects at the site.
-   - TotalSafetyQueries = sum of safety queries across subjects at the site.
-   - SubjectCount = number of subjects at the site.
-   - OpenIssuesperPatient = TotalOpenQueries / SubjectCount.
-
-3. SiteRiskStatus (Red / Amber / Green)
-
-Rules:
-
-- Red: AvgDQISite < 60 or TotalSafetyQueries > 0.  
-- Amber: 60 ≤ AvgDQISite < 80 and no safety queries.  
-- Green: AvgDQISite ≥ 80 and TotalSafetyQueries == 0.
-
-4. CRA performance linkage  
-   - Merge site‑level metrics with CRA master data to attach CRAName per site, enabling CRA‑focused reporting.
-
-The resulting site metrics serve as inputs to later phases and to the dashboard.
+| File | Role |
+|:--|:--|
+| `master_dataset_creation.py` | Scans study folders, locates relevant Excel files per study using filename patterns (`cpid`, `pages`, `inactivated`, `lab`, `sae`, `meddra`, `whodd`, `edrr`), normalizes heterogeneous column names to canonical names (e.g., "site id" / "site number" → `SiteID`), builds a CPID spine per study, merges other domains with robust left joins on `(SiteID, SubjectID)`, and concatenates all spines into `masterdataset.csv` |
+| `master_cra_creation.py` | Reads the master CPID file and CRA-related sheets and builds a master CRA dataset linking `SiteID` and `CRAName` (Action Owner) to detailed query and issue records |
+| `combined_query_report.ipynb` | Combines raw query exports into a unified record-level `cumulative_query_report.xlsx` (Study, Region, Country, Site Number, Subject Name, Folder Name, Form, Field OID, Query Status, Action Owner, days-since-open, days-since-response) |
+| `phase_1.ipynb` | Builds a subject-visit-form master (~57,974 rows, 101 columns) and derives subject, site, country, and region metrics. Writes `dataset_subject.xlsx`, `dataset_site.xlsx`, `dataset_country.xlsx`, `dataset_region.xlsx` |
+| `phase_2_3.ipynb` | Adds `PatientCleanStatus`, `BlockingReason`, and `DQISubjectScore`; aggregates to site-level metrics and `SiteRiskStatus`; produces interim unified subject and site files |
+| `phase_4.ipynb` | Joins site metrics with the geographic mapping (SiteID → country → region) to produce unified country and region datasets with trends, red-site counts, and readiness percentages |
+| `phase_5.ipynb` | Locks down deterministic business logic, generates risk signals and recommended actions, and produces AI summaries |
+| `interim_unified_{subject,site,country,region}.xlsx` | Staging outputs used as inputs to `phase_5` and the dashboard |
+| `Site_Oversight_Final_Report.xlsx` | Final per-site oversight table used by the dashboard (metrics, `SiteRiskStatus`, `CRAName`, `AnalysisReadiness`, `CriticalSite`, `RiskSignals`, `RecommendedActions`, AI summaries, country, region) |
+| `Full_CRA_Site_Performance_Reports.txt` | Human-readable summaries by site: risk color, metrics, risk signals, and recommended actions |
+| `app3.py` | Streamlit app with four pages (SUBJECT, SITE, COUNTRY, REGION LEVEL); integrates the CRA report file to show AI summaries per site |
 
 ---
 
-4. Phase 4 – Country and Region‑Level Trends (phase_4.ipynb)
+## 3. Phase-by-Phase Workflow
 
-Phase 4 aggregates site metrics to country and region levels and derives trend indicators.
+### 3.1 Phase 0: Master Dataset Creation (`master_dataset_creation.py`)
 
-1. Mapping SiteID to country and region  
-   - Using Phase 1 data and mapping logic, each SiteID is associated with a country and region (for example, US in AMERICA, IND in ASIA, FRA in EMEA).
+Converts raw multi-file study exports into a single `masterdataset.csv`.
 
-2. Country‑level aggregations  
-   - For each country:  
-     - AvgDQI: mean DQISite across sites in the country.  
-     - TotalRedSites: count of sites with SiteRiskStatus == Red.  
-     - TotalSites: total site count.  
-     - ReadySitesCount: number of sites marked AnalysisReadiness == Ready.  
-     - PctSitesReady: 100 × ReadySitesCount / TotalSites.  
-     - Trend: categorical indicator (for example, Improving, Stable, Worsening) based on DQI and readiness patterns.
+- **Study discovery:** iterates over all study folders and identifies 23 studies (IDs 1 to 25, with two missing in between)
+- **File discovery per study:** keyword patterns locate the CPID spine and other domains (visit, lab, SAE, pages, inactivated, MedDRA, WHODrug, EDRR)
+- **Column normalization:** lower-cases and strips column names, then maps variants to standard keys via a mapping dictionary
+- **Robust left joins:** starts from CPID as the spine; for each domain, joins only on keys present on both sides and drops overlapping non-key columns
+- **Concatenation:** merges all per-study spines into the combined master dataset
 
-3. Region‑level aggregations  
-   - For each region (for example, AMERICA, ASIA, EMEA):  
-     - AvgDQI, RedSiteCount, TotalSites, ReadySitesCount, PctSitesReady, Trend.
+### 3.2 Phase 1: Subject, Site, Country, Region Metrics (`phase_1.ipynb`)
 
-These country and region metrics feed the geographic insights pages in the dashboard.
+1. **Load the base master dataset:** a subject-visit dataset with study, region, country, `SiteID`, `SubjectID`, and EDC-derived metrics.
+2. **Ingest cumulative reports:** Missing Pages, Query, and Non-Conformant reports, validating shapes to understand coverage.
+3. **Derive subject-level flags**
 
----
+   | Metric | Definition |
+   |:--|:--|
+   | `MissingVisit` | 1 when a visit is expected (visit name, projected date, days outstanding) but not present and overdue |
+   | `MissingPages` | Subject-level counts rebuilt from the Missing Pages report, merged on `SubjectID`, nulls filled with 0 |
+   | `UncodedTerms` | Count of uncoded terms per subject, from coding-required flags in MedDRA and WHODrug tables |
+   | `TotalQueries` / `SafetyQueries` | Total queries per subject / queries flagged as safety |
+   | `ProblematicCRF` | Pages requiring verification where CRFs are not frozen or unlocked |
+   | `ProtocolDeviations` | Sum of confirmed and proposed deviations |
+   | `CRFNotSigned` | CRFs overdue for signature (0–45, 45–90, 90+ days), plus broken and never-signed CRFs |
+   | `problematicreviews` | Records needing review (non-null review or action status) |
+   | `MissingCRFDays` | Total days a page is missing per subject |
+   | `OpenIssues`, `Days Outstanding` | Maximum total open issues / maximum days outstanding per subject |
 
-5. Phase 5 – Lock‑Down Logic, Risk Signals, and AI (phase_5.ipynb)
+4. **Percentage KPIs (subject level)** (each is 0 when the denominator is 0)
+   - `missingvisitspct = 100 × MissingVisit / Expected Visits`
+   - `missingpagespct = 100 × MissingPages / TotalPagesMissingEntered`
+   - `openqueriespct = 100 × OpenQueries / TotalQueries`
+   - `crfverificationneededpct = 100 × ProblematicCRF / PagesEntered`
+   - `crfsignatureneededpct = 100 × CRFNotSigned / PagesEntered`
+5. **Aggregate by `SubjectID`:** sum counts and average percentage columns to one row per subject → `dataset_subject.xlsx`.
+6. **Aggregate by site, country, region:** `dataset_site.xlsx`, `dataset_country.xlsx`, `dataset_region.xlsx` (regions such as AMERICA, ASIA, EMEA).
 
-Phase 5 finalizes deterministic rules, generates risk signals and operational recommendations, and uses generative AI for narrative oversight.
+### 3.3 Phase 2–3: Clean Status, Blocking Reason, DQI, Site Metrics (`phase_2_3.ipynb`)
 
-5.1 Lock Down Deterministic Business Logic
+**PatientCleanStatus and BlockingReason**
 
-1. CriticalSubject  
-   - A subject is considered CriticalSubject if at least one of:  
-     - DQISubjectScore < 85  
-     - SafetyQueries > 0  
-     - OpenQueries > 0
+- Reason columns: `MissingVisit`, `MissingPages`, `OpenQueries`, `SafetyQueries`, `crfverificationneededpct`, `crfsignatureneededpct`, `ProtocolDeviations`
+- `PatientCleanStatus` is **Clean** if all reason columns are zero, otherwise **Not Clean**
+- `BlockingReason` is a comma-separated list of the non-zero reason columns (e.g., "MissingPages, Open Queries, crfsignatureneededpct, ProtocolDeviations"); `None` for clean subjects
 
-2. CriticalSite  
-   - A site is CriticalSite if any of:  
-     - AvgDQISite < 70  
-     - TotalSafetyQueries > 0  
-     - TotalOpenQueries > 5
+**DQISubjectScore (0–100, with safety cap)**
 
-3. AnalysisReadiness  
+1. Start at 100.
+2. Deduct 5 per missing visit, 1.5 per open query, 1 per unsigned CRF, 1 per unverified page (`problematicreviews`), and 4 per protocol deviation.
+3. If `SafetyQueries > 0`: deduct a flat 20 and cap the score at 60.
+4. Clamp at a minimum of 0.
 
-A site is Ready if:
+| Score | Interpretation |
+|:--|:--|
+| 90–100 | High-quality subjects with minimal issues |
+| 70–89 | Moderate quality with some issues |
+| 60–69 | Borderline, near escalation |
+| < 60 | High-risk; counted in `HighRiskPatientCount` at site level |
 
-- SiteRiskStatus is Green.  
-- CriticalSite is False.  
-- CleanPatientRate is sufficiently high (for example, around or above 70–80 percent).  
-- TotalOpenQueries is low and TotalSafetyQueries == 0.
+**Site-level aggregation** (group by `SiteID`, after mapping each subject to its site)
 
-Otherwise the site is Not Ready.
+- `CleanPatientRate` = 100 × share of subjects with `PatientCleanStatus == "Clean"`
+- `AvgDQISite` = mean `DQISubjectScore` at the site
+- `HighRiskPatientCount` = subjects with `DQISubjectScore < 60`
+- `TotalOpenQueries`, `TotalSafetyQueries` = sums across subjects
+- `SubjectCount` = number of subjects at the site
+- `OpenIssuesperPatient` = `TotalOpenQueries / SubjectCount`
+- `CRAName` is attached by merging with the CRA master data
 
-AnalysisReadiness is stored in the final site oversight file and used both in the dashboard and in aggregated country and region readiness metrics.
+**SiteRiskStatus (Red / Amber / Green)**
 
-5.2 Risk Signals and Playbook (Rule‑Driven Agentic AI)
+| Status | Rule |
+|:--|:--|
+| 🔴 Red | `AvgDQISite < 60` or `TotalSafetyQueries > 0` |
+| 🟠 Amber | `60 ≤ AvgDQISite < 80` and no safety queries |
+| 🟢 Green | `AvgDQISite ≥ 80` and `TotalSafetyQueries == 0` |
 
-Risk signals provide a structured, machine‑interpretable summary of site risk state.
+### 3.4 Phase 4: Country and Region Trends (`phase_4.ipynb`)
 
-1. Risk signal extraction  
+Each `SiteID` is mapped to a country and region (e.g., US → AMERICA, IND → ASIA, FRA → EMEA), then aggregated:
 
-Given a site row, risk signals are built as:
+- **Country level:** `AvgDQI`, `TotalRedSites`, `TotalSites`, `ReadySitesCount`, `PctSitesReady` (= 100 × `ReadySitesCount` / `TotalSites`), and `Trend` (Improving / Stable / Worsening, based on DQI and readiness patterns)
+- **Region level:** `AvgDQI`, `RedSiteCount`, `TotalSites`, `ReadySitesCount`, `PctSitesReady`, `Trend`
 
-- RED_SITE_IMMEDIATE_ACTION if SiteRiskStatus == Red.  
-- SAFETY_ESCALATION if TotalSafetyQueries > 0.  
-- LOW_DQI if AvgDQISite < 70.  
-- QUERY_BACKLOG if TotalOpenQueries > 20.
+These feed the geographic pages of the dashboard.
 
-These signals are stored in a RiskSignals field as a list per site.
+### 3.5 Phase 5: Lock-Down Logic, Risk Signals, and AI (`phase_5.ipynb`)
 
-2. Action playbook  
+**Deterministic business logic**
 
-Signals are mapped to recommended actions:
+- **CriticalSubject:** `DQISubjectScore < 85` or `SafetyQueries > 0` or `OpenQueries > 0`
+- **CriticalSite:** `AvgDQISite < 70` or `TotalSafetyQueries > 0` or `TotalOpenQueries > 5`
+- **AnalysisReadiness:** a site is **Ready** if `SiteRiskStatus` is Green, `CriticalSite` is False, `CleanPatientRate` is sufficiently high, and open queries are low with zero safety queries; otherwise **Not Ready**. See also the stricter "90-0-80" rule in [Version 2.0](#7-version-20-features-jan-2026-update).
 
-- RED_SITE_IMMEDIATE_ACTION → Immediate CRA outreach and site action plan required.  
-- SAFETY_ESCALATION → Escalate to safety team within 24 hours.  
-- LOW_DQI → Focused data cleaning and monitoring visit required.  
-- QUERY_BACKLOG → Query aging review and resolution plan.
+**Risk signals and playbook (rule-driven agentic AI)**
 
-For each site, RecommendedActions contains the set of recommended operational steps based on its signals.
+| Signal | Trigger | Recommended action |
+|:--|:--|:--|
+| `RED_SITE_IMMEDIATE_ACTION` | `SiteRiskStatus == Red` | Immediate CRA outreach and site action plan required |
+| `SAFETY_ESCALATION` | `TotalSafetyQueries > 0` | Escalate to the safety team within 24 hours |
+| `LOW_DQI` | `AvgDQISite < 70` | Focused data cleaning and monitoring visit required |
+| `QUERY_BACKLOG` | `TotalOpenQueries > 20` | Query aging review and resolution plan |
 
-3. Dashboard tag  
+Signals are stored per site in `RiskSignals`, and the matching steps in `RecommendedActions`. A simplified dashboard tag is derived from risk status: Red → "Immediate Action Required", Amber → "Monitor Closely", otherwise "On Track".
 
-A simplified tag for UI display:
+**Generative AI summaries**
 
-- If SiteRiskStatus is Red, tag like “Immediate Action Required”.  
-- If Amber, tag like “Monitor Closely”.  
-- Otherwise, “On Track”.
-
-This tag is used for quick visual interpretation and in AI prompts.
-
-5.3 Generative AI Summaries
-
-1. Priority site selection  
-   - Filter to Red and Amber sites to focus AI summarization on locations that need attention.
-
-2. Prompt templates  
-
-Two main prompt styles:
-
-- CRA prompt: oriented toward operational site‑level actions for CRAs (visit planning, follow‑up, remediation).  
-- CSM prompt: oriented toward higher‑level study oversight for clinical study managers (trends, escalations, readiness narrative).
-
-3. Batch generation  
-
-- Sites are processed in batches (for example, 5 sites per call), with structured lines describing per‑site metrics and risk signals, which are passed to the language model to generate text summaries.  
-- The model response is parsed to associate each summary back to the correct SiteID.
-
-4. Single‑site summary extraction  
-
-- For each site, a function extracts only that site’s text segment from the batched AI summary and stores it as an individual narrative.  
-- Simple cases like “Site on track.” are retained as is for low‑risk Green sites.
-
-5. Export  
-
-Final outputs:
-
-- Site_Oversight_Final_Report.xlsx with deterministic metrics, risk signals, recommended actions, and AI summaries per site.  
-- Full_CRA_Site_Performance_Reports.txt containing formatted multi‑site CRA reports, including metrics, signals, actions, and AI narrative paragraphs.
+1. **Priority selection:** Red and Amber sites are summarized.
+2. **Prompt templates:** a *CRA prompt* (operational: visit planning, follow-up, remediation) and a *CSM prompt* (study oversight: trends, escalations, readiness).
+3. **Batch generation:** sites are sent in batches (e.g., 5 per call) as structured lines of metrics and risk signals to an LLM (e.g., Gemini 2.5 Flash); responses are parsed back to the correct `SiteID`.
+4. **Single-site extraction:** each site's text segment is extracted from the batched output; simple cases like "Site on track." are kept as-is for low-risk Green sites.
+5. **Export:** `Site_Oversight_Final_Report.xlsx` (metrics, signals, actions, AI summaries) and `Full_CRA_Site_Performance_Reports.txt` (multi-site CRA report).
 
 ---
 
-6. Derived Metrics and Concepts
+## 4. Key Definitions
 
-6.1 DQI (Data Quality Index)
-
-Definition: DQISubjectScore is a 0–100 score that quantifies per‑subject data quality using missing visits, missing pages, queries, signatures, verifications, and protocol deviations, with an additional safety cap.
-
-Components:
-
-- Base score: 100 points.  
-- Deductions:  
-  - 5 points per missing visit.  
-  - 1.5 points per open query.  
-  - 1 point per unsigned CRF.  
-  - 1 point per unverified page.  
-  - 4 points per protocol deviation.
-- Safety cap: if SafetyQueries > 0, apply a 20‑point deduction and cap the score at 60.  
-- Final: clamp at 0 minimum.
-
-This design ensures safety‑impacted subjects cannot be scored as high‑quality even if other metrics appear good.
-
-6.2 Patient Clean Status and Blocking Reason
-
-PatientCleanStatus:
-
-- Clean: no missing visits or pages, no open or safety queries, no protocol deviations, no pending signature or verification.
-- Not Clean: at least one of these issues present.
-
-BlockingReason:
-
-- For Not Clean subjects, a comma‑separated list of the specific non‑zero blocking metrics such as MissingPages, Open Queries, crfsignatureneededpct, or ProtocolDeviations.  
-- For Clean subjects, stored as None.
-
-This provides a transparent explanation of why a subject is not analysis‑ready.
-
-6.3 Site Risk Status (Red, Amber, Green)
-
-Derived from site‑level DQI and safety query burden:
-
-- Red: AvgDQISite < 60 or any safety queries.  
-- Amber: 60 ≤ AvgDQISite < 80 and no safety queries.  
-- Green: AvgDQISite ≥ 80 and no safety queries.
-
-This classification is used in filters, charts, and risk signals.
-
-6.4 Analysis Readiness
-
-Analysis readiness is a site‑level gate indicating if data at the site is fit for analysis and lock.
-
-Conditions to be Ready typically include:
-
-- Green SiteRiskStatus.  
-- CriticalSite flag is False.  
-- Adequate CleanPatientRate (a high fraction of clean subjects).  
-- Low query burden and zero safety queries.
-
-Sites not meeting these thresholds are marked Not Ready and appear as such in the dashboard and in country/region readiness statistics.
-
-6.5 Country and Region Trends
-
-Country level (interim_unified_country):
-
-- AvgDQI: average of AvgDQISite across sites in the country.  
-- TotalRedSites and TotalSites.  
-- ReadySitesCount and PctSitesReady.  
-- Trend label, often based on the balance of ready versus red sites and progression of readiness.
-
-Region level (interim_unified_region):
-
-- AvgDQI, RedSiteCount, TotalSites, ReadySitesCount, PctSitesReady, Trend per region.
-
-These metrics back the geographic visuals and trend filters in the COUNTRY LEVEL and REGION LEVEL dashboard pages.
-
-6.6 Risk Signals and Risk‑Based Actions
-
-Risk signals summarize site risk state:
-
-- RED_SITE_IMMEDIATE_ACTION when SiteRiskStatus is Red.  
-- SAFETY_ESCALATION when TotalSafetyQueries > 0.  
-- LOW_DQI when AvgDQISite < 70.  
-- QUERY_BACKLOG when TotalOpenQueries > 20.
-
-The action playbook maps these signals to specific next steps:
-
-- Immediate CRA outreach and site action plan for RED_SITE_IMMEDIATE_ACTION.  
-- Escalation to safety team within 24 hours for SAFETY_ESCALATION.  
-- Focused data cleaning and monitoring visit for LOW_DQI.  
-- Query aging review and resolution plan for QUERY_BACKLOG.
-
-These are combined into RecommendedActions, which are used both in the dashboard and in CRA reports.
+- **DQI (Data Quality Index):** a 0–100 per-subject score built from missing visits, missing pages, queries, signatures, verifications, and protocol deviations, with a safety cap. The cap ensures safety-impacted subjects can never score as high-quality even if other metrics look good.
+- **Patient Clean Status / Blocking Reason:** transparent explanation of why a subject is not analysis-ready.
+- **Site Risk Status:** Red / Amber / Green from site-level DQI and safety query burden; used in filters, charts, and risk signals.
+- **Analysis Readiness:** a site-level gate showing whether data at the site is fit for analysis and lock. Not Ready sites are flagged in the dashboard and in country/region readiness statistics.
+- **Country and region trends:** `AvgDQI`, red-site counts, and readiness percentages that back the COUNTRY LEVEL and REGION LEVEL pages.
 
 ---
 
-7. Dashboard – How to Run
+## 5. Dashboard: How to Run
 
-The Streamlit dashboard in app3.py expects final unified files and the CRA report in a specified directory.
+The Streamlit dashboard in `app3.py` expects the final unified files and the CRA report in a specified directory.
 
-7.1 Prerequisites
+**Prerequisites**
 
-- Python 3.9 or newer.  
-- Libraries: streamlit, pandas, plotly‑express.
+- Python 3.9 or newer
+- Libraries: `streamlit`, `pandas`, `plotly-express`
 
-Example installation:
-
-```bash```
+```bash
 pip install streamlit pandas plotly-express
+```
 
-7.2 File Layout for Dashboard
+**File layout**
 
-Place the following in a folder referenced in app3.py (for example, C/dashboard/):
+Place the following in the folder referenced in `app3.py` (e.g., `C/dashboard/`), adjusting the paths in `app3.py` if your directory differs:
 
-- unifiedsubject.xlsx → interim_unified_subject.xlsx exported from Phase 2–3 or Phase 5.
+| Expected by the app | Source file |
+|:--|:--|
+| `unifiedsubject.xlsx` | `interim_unified_subject.xlsx` (from Phase 2–3 or Phase 5) |
+| `OversightFinalReport.xlsx` | `Site_Oversight_Final_Report.xlsx` (renamed or copied) |
+| `unifiedcountry.xlsx` | `interim_unified_country.xlsx` |
+| `unifiedregion.xlsx` | `interim_unified_region.xlsx` |
+| `CRASitePerformanceReports.txt` | `Full_CRA_Site_Performance_Reports.txt` (renamed) |
 
-- OversightFinalReport.xlsx → Site_Oversight_Final_Report.xlsx (renamed or copied).
+**Run**
 
-- unifiedcountry.xlsx → interim_unified_country.xlsx.
-
-- unifiedregion.xlsx → interim_unified_region.xlsx.
-
-- CRASitePerformanceReports.txt → Full_CRA_Site_Performance_Reports.txt (renamed).
-
-If your directory differs, adjust the paths in app3.py accordingly.
-
-7.3 Running the Dashboard
-
-Run:
-
-bash
+```bash
 streamlit run app3.py
-Open the local URL that Streamlit prints (for example, http://localhost:8501).
+```
 
-7.4 Dashboard Pages
+Open the local URL that Streamlit prints (e.g., `http://localhost:8501`).
 
-7.4.1 SUBJECT LEVEL
+**Dashboard pages**
 
-- Filters: Clean Status (PatientCleanStatus), Blocking Reason, Region, Country.
+| Page | Contents |
+|:--|:--|
+| **SUBJECT LEVEL** | Filters: Clean Status, Blocking Reason, Region, Country. Metric cards for a selected subject (DQI score, missing visits / pages %, open queries %, verification and signature needed %, total and safety queries). Patient status text. Issue distribution bar chart (Total Queries, Protocol Deviations, Missing Pages) |
+| **SITE LEVEL** | Filters: Risk Status, Country, Region, Ready Status. Site overview (Subject Count, Avg DQI, Total Open Queries). Location status (region, country, risk level, critical flag, risk signals). Recommended Actions panel. AI Insight Summary from the CRA report. Risk distribution pie chart |
+| **COUNTRY LEVEL** | Filters: Region, Trend. Table of country, TotalSites, AvgDQI, PctSitesReady, TotalRedSites, Trend. Scatter plot of AvgDQI vs PctSitesReady (bubble size = TotalSites, color = Trend) |
+| **REGION LEVEL** | Filter: Trend. Expanders with metrics per region (TotalSites, AvgDQI, ready site %, RedSiteCount). Bar chart of TotalSites by region, colored by Trend |
 
-- Metrics cards for a selected subject: DQI Score, missing visits percentage, missing pages percentage, open queries percentage, verification needed percentage, signature needed percentage, total queries, safety queries.
+---
 
-- Patient Status text shows Clean Status and Blocking Reason.
+## 6. End-to-End Execution Order
 
-- Subject Issue Distribution bar chart compares Total Queries, Protocol Deviations, and Missing Pages.
+1. Run `master_dataset_creation.py` to produce `masterdataset.csv` from the raw study files.
+2. Run `master_cra_creation.py` to build the CRA master dataset.
+3. Run `combined_query_report.ipynb` to generate `cumulative_query_report.xlsx` from the raw query exports.
+4. Run `phase_1.ipynb` to compute subject, site, country, and region metrics (`dataset_subject.xlsx`, `dataset_site.xlsx`, `dataset_country.xlsx`, `dataset_region.xlsx`).
+5. Run `phase_2_3.ipynb` to add Patient Clean Status, Blocking Reason, and DQI Subject Score, and aggregate to site metrics with Site Risk Status and CRA Name (interim subject and site datasets).
+6. Run `phase_4.ipynb` to derive `interim_unified_country.xlsx` and `interim_unified_region.xlsx` with geographic trends and readiness metrics.
+7. Run `phase_5.ipynb` to lock down Critical Subject, Critical Site, and Analysis Readiness, generate Risk Signals and Recommended Actions, create AI summaries, and export `Site_Oversight_Final_Report.xlsx` and `Full_CRA_Site_Performance_Reports.txt`.
+8. Place the exported unified files and the CRA report where `app3.py` expects them, then run `streamlit run app3.py`.
 
-7.4.2 SITE LEVEL
+---
 
-- Filters: Risk Status (SiteRiskStatus), Country, Region, Ready Status (AnalysisReadiness).
+## 7. Version 2.0 Features (Jan 2026 Update)
 
-- Site Overview metrics: Subject Count, Avg DQI, Total Open Queries.
+The latest release evolves TrialOversightAI from a diagnostic tool into an active trial management platform with an enhanced tech stack and executive-level features.
 
-- Location Status: Region and Country, Risk Level, Critical Site flag, Risk Signals.
+### 1. Executive Intelligence Layer
 
-- Recommended Actions panel filled from the playbook.
+- **Global Executive Overview:** a top-tier entry point giving a bird's-eye view of trial health across 23 studies
+- **Risk Concentration Heatmap:** a relative intensity algorithm that identifies geographic hotspots in AMERICA, ASIA, and EMEA without volume bias
+- **Normalized Performance Metrics:** global DQI and high-risk site percentages calculated in real time to guide resource allocation
 
-- AI Insight Summary text from the CRA performance report file.
+### 2. Operational Actionability
 
-- Risk distribution pie chart of SiteRiskStatus across filtered sites.
+- **Interactive Command Center:** active buttons to *Send Alerts to CRAs* and *Schedule Monitoring Visits*, moving the dashboard from passive reporting to active intervention
+- **Trial Progress Timeline:** Gantt charts that visualize site-level progression from Start-Up to Close-Out
+- **Empty-State Handling:** robust error-trapping and "No Data Found" alerts during complex filtering
 
-7.4.3 COUNTRY LEVEL
+### 3. Enhanced Quality & AI Logic
 
-- Filters: Region, Trend.
+- **"90-0-80" Readiness Rule:** a stricter, multi-factor gate for Analysis Readiness requiring >90% clean patients, zero safety queries, and >80 site DQI
+- **Visualized Safety-Cap:** explicit UI flagging for subjects whose DQI is capped at 60 due to safety overrides
+- **Persona-Aware Narratives:** the Gemini 2.5 Flash layer better distinguishes tactical CRA needs from strategic CSM oversight requirements
 
-- Table: country, TotalSites, AvgDQI, PctSitesReady, TotalRedSites, Trend.
+### 4. Modern UI/UX Architecture
 
-- Scatter plot: AvgDQI vs PctSitesReady, bubble size by TotalSites, color by Trend.
-
-7.4.4 REGION LEVEL
-
-- Filters: Trend.
-
-- Expanders with metrics per region: TotalSites, AvgDQI, Ready site percentage, RedSiteCount.
-
-- Bar chart of TotalSites by region, colored by Trend.
-
-8. End‑to‑End Execution Order
-
-- Run master_dataset_creation.py to produce masterdataset.csv from raw study files.
-
-- Run master_cra_creation.py to build the CRA master dataset.
-
-- Run combined_query_report.ipynb to generate cumulative_query_report.xlsx from raw query exports.
-
-- Run phase_1.ipynb to compute subject, site, country, and region metrics and write dataset_subject.xlsx, dataset_site.xlsx, dataset_country.xlsx, and dataset_region.xlsx.
-
-- Run phase_2_3.ipynb to add Patient_Clean_Status, Blocking_Reason, DQI_Subject_Score and aggregate to site metrics with Site_Risk_Status and CRA_Name, producing interim subject and site unified datasets.
-
-- Run phase_4.ipynb to derive interim_unified_country.xlsx and interim_unified_region.xlsx with geographic trends and readiness metrics.
-
-- Run phase_5.ipynb to lock down Critical_Subject, Critical_Site, Analysis_Readiness, generate Risk_Signals and Recommended_Actions, create AI summaries, and export Site_Oversight_Final_Report.xlsx and - Full_CRA_Site_Performance_Reports.txt.
-
-- Place the exported unified files and CRA report where app3.py expects them and run streamlit run app3.py to launch the dashboard.
-
-This flow covers the complete pipeline from raw EDC exports to interactive oversight and AI‑augmented CRA reporting.
-
-# Version 2.0 Features (Jan 2026 Update)
-
-The latest release evolves the TrialGuardianAI from a diagnostic tool into an active trial management platform with an enhanced tech stack and executive-level features.
-
-1. Executive Intelligence Layer
-
-- Global Executive Overview: A new top-tier entry point providing a "bird’s-eye view" of trial health across 23 studies.
-   
-- Risk Concentration Heatmap: Utilizes a relative intensity algorithm to identify geographic "hotspots" in AMERICA, ASIA, and EMEA without volume bias.
-
-- Normalized Performance Metrics: Global DQI and high-risk site percentages are calculated in real-time to guide resource allocation.
-
-2. Operational Actionability
-
-- Interactive Command Center: Added active buttons to Send Alerts to CRAs and Schedule Monitoring Visits, transitioning the dashboard from passive reporting to active intervention.
-
-- Trial Progress Timeline: Integrated Gantt charts to visualize site-level progression from Start-Up to Close-Out, providing crucial temporal context for data quality issues.
-
-- Empty-State Handling: Implementation of robust error-trapping and "No Data Found" alerts for a seamless user experience during complex filtering.
-
-3. Enhanced Quality & AI Logic
-
-- "90-0-80" Readiness Rule: A stricter, multi-factor gate for Analysis Readiness requiring >90% clean patients, zero safety queries, and >80 site DQI.
-
-- Visualized Safety-Cap: Explicit UI flagging for subjects whose DQI is capped at 60 due to safety overrides, ensuring total transparency in risk scoring.
-
-- Persona-Aware Narratives: Optimized the Gemini 2.5 Flash layer to better distinguish between tactical CRA needs and strategic CSM oversight requirements.
-
-4. Modern UI/UX Architecture
-
-- Streamlit Ant-Design (SAC) Integration: Replaced standard sidebar selectors with a modern, icon-based navigation menu for professional-grade application feel.
-
-- Responsive Multi-Tier Hub: Optimized drill-down performance, allowing users to move from global trends to specific subject-level "Blocking Reasons" in seconds.
+- **Streamlit Ant-Design (SAC) integration:** an icon-based navigation menu replaces the standard sidebar selectors
+- **Responsive multi-tier hub:** optimized drill-down performance, from global trends to subject-level Blocking Reasons in seconds
